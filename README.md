@@ -1,4 +1,4 @@
-#ns2-skill
+# ns2-skill
 ---
 ## Hive skill per teams method (Bleu)
 

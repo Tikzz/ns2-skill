@@ -14,6 +14,9 @@ logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(leve
 
 
 class Stats():
+    def __init__(self):
+        self.update()
+
     def update(self):
         start = time.time()
         conn = MySQLdb.connect(host=config.MYSQL_HOST, user=config.MYSQL_USER, passwd=config.MYSQL_PASS,
@@ -186,8 +189,6 @@ class Shuffle():
             'team2_marine_skill': [int(p.marine_hs) for p in self.best.marine_players],
             'team2_alien_skill': [int(p.alien_hs) for p in self.best.alien_players],
             'diagnostics': {
-                'Marines avg': self.best.marines_avg,
-                'Aliens avg': self.best.aliens_avg,
                 'Score': self.best.score,
                 'RScore': self.best.score_tr
             }}

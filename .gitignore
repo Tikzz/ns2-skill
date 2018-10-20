@@ -5,3 +5,4 @@ app/config.py
 *.csv
 *.pyc
 __pycache__
+*test*

@@ -1,5 +1,5 @@
 # ns2-skill
----
+
 ## Hive skill per teams method (Bleu)
 
 ### Teams:

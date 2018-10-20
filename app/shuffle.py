@@ -90,7 +90,7 @@ class Player():
     def json(self):
         response = {'ns2id': self.ns2id, 'marine_skill': self.marine_hs, 'alien_skill': self.alien_hs}
 
-        return json.dumps(response, indent=4)
+        return json.dumps(response)
 
     def __eq__(self, other):
         return self.ns2id == other.ns2id
@@ -192,10 +192,4 @@ class Shuffle():
                 'RScore': self.best.score_tr
             }}
 
-        return json.dumps(response, indent=4)
-
-
-if __name__ == '__main__':
-    s = Shuffle(
-        [181662, 1291449, 12312523, 13674857, 23186581, 28152187, 37745947, 42247631, 48772101, 54888603, 57582675,
-         79089452, 139217532, 142399946, 333858003, 440888031], [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+        return json.dumps(response)

@@ -22,7 +22,7 @@ def get_hs_teams():
     hiveskill = json.loads(request.form['hiveskill'])
     player = Player(ns2id, hiveskill)
 
-    return jsonify(player.json)
+    return player.json
 
 if __name__ == '__main__':
     app.debug = True

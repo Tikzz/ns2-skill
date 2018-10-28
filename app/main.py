@@ -1,5 +1,5 @@
-from app import app
-from flask import request, jsonify
+from app import app, stats
+from flask import request
 import json
 from app.shuffle import Shuffle, Player
 import logging
@@ -12,7 +12,7 @@ def shuffle():
     logging.info(request.form)
     ns2ids = json.loads(request.form['ns2ids'])
     hiveskills = json.loads(request.form['hiveskills'])
-    shuffle = Shuffle(ns2ids, hiveskills)
+    shuffle = Shuffle(ns2ids, hiveskills, stats)
 
     return shuffle.json
 
@@ -20,7 +20,8 @@ def shuffle():
 def get_hs_teams():
     ns2id = json.loads(request.form['ns2id'])
     hiveskill = json.loads(request.form['hiveskill'])
-    player = Player(ns2id, hiveskill)
+    stats.update()
+    player = Player(ns2id, hiveskill, stats)
 
     return player.json
 

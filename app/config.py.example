@@ -2,3 +2,14 @@ MYSQL_HOST = ''
 MYSQL_USER = ''
 MYSQL_PASS = ''
 MYSQL_DB = 'wonitor_ns2plus'
+
+# Constant values used in calculations
+
+# Number of player's last matches per team to use
+N = 50
+
+# Number of player's last matches to use for team repeat scoring
+N_WEIGHT = 3
+
+# Score cutoff to filter good enough combinations, and proceed to pick the one with least team repeat score.
+SCORE_CUTOFF = 100

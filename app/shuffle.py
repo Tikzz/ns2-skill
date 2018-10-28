@@ -4,7 +4,7 @@ import logging
 import math
 import time
 
-import MySQLdb
+import pymysql.cursors
 import numpy as np
 import pandas as pd
 
@@ -19,30 +19,35 @@ class Stats():
 
     def update(self):
         start = time.time()
-        conn = MySQLdb.connect(host=config.MYSQL_HOST, user=config.MYSQL_USER, passwd=config.MYSQL_PASS,
+        conn = pymysql.connect(host=config.MYSQL_HOST, user=config.MYSQL_USER, passwd=config.MYSQL_PASS,
                                db=config.MYSQL_DB)
         prs = pd.read_sql_query(
-            'select prs.roundId, prs.steamId, ps.hiveSkill, prs.playerName, prs.lastTeam, if(prs.lastTeam=winningTeam,1,0) wins, if(prs.lastTeam=winningTeam,0,1) losses from PlayerRoundStats prs inner join RoundInfo ri on ri.roundId = prs.roundId inner join PlayerStats ps on ps.steamId = prs.steamId',
+            'select prs.roundId, prs.steamId, ps.hiveSkill, prs.playerName, prs.lastTeam,'
+            ' if(prs.lastTeam=winningTeam,1,0) wins, if(prs.lastTeam=winningTeam,0,1) losses from PlayerRoundStats prs'
+            ' inner join RoundInfo ri on ri.roundId = prs.roundId inner join PlayerStats ps on ps.steamId = prs.steamId',
             conn)
         conn.close()
         logging.info(f'SQL fetched in {time.time()-start:.3f} secs ({len(prs)} round players)')
 
-        n = 30
+        n = config.N
 
         start = time.time()
-        self.df = prs.groupby(['steamId', 'lastTeam']).head(n)
+        self.df = prs.groupby(['steamId', 'lastTeam']).tail(n)
         self.df = self.df.groupby(['steamId', 'lastTeam']).agg(
             {'wins': ['sum'], 'losses': ['sum'], 'hiveSkill': ['last'], 'playerName': ['first']})
 
         n_x = self.df[('wins', 'sum')] + self.df[('losses', 'sum')]
         self.df['winrate'] = self.df[('wins', 'sum')] / n_x
-        self.df['P_X'] = (n_x / n) ** 0.5
+        self.df['P_X'] = (n_x / n) ** 3
 
-        self.df['HS_X'] = self.df[('hiveSkill', 'last')] * (
-                self.df['winrate'] * 2 * self.df['P_X'] + (1 - self.df['P_X']))
+        # Final multiplier of hive skill per team
+        self.df['M_X'] = (self.df['winrate'] * 2 * self.df['P_X'] + (1 - self.df['P_X']))
 
-        n_weight = 5
-        self.df_weight = prs.groupby(['steamId']).head(n_weight)
+
+        # Get the proportion of games played per team, of last n_weight matches.
+        # This is used for shuffle purposes to avoid putting the same players in a same team a lot.
+        n_weight = config.N_WEIGHT
+        self.df_weight = prs.groupby(['steamId']).tail(n_weight)
         self.df_weight = self.df_weight.groupby(['steamId', 'lastTeam']).agg({'lastTeam': ['count']})
         self.df_weight['p'] = self.df_weight[('lastTeam', 'count')] / n_weight
 
@@ -52,11 +57,8 @@ class Stats():
         logging.info(f'Hive per team updated in {(time.time()-start)*1000:.0f} ms ({len(self.df)} unique players)')
 
 
-stats = Stats()
-
-
 class Player():
-    def __init__(self, ns2id, hiveskill):
+    def __init__(self, ns2id, hiveskill, stats):
         self.ns2id = ns2id
         self.hs = hiveskill
 
@@ -70,12 +72,12 @@ class Player():
             self.alien_p = 0
         else:
             try:
-                self.marine_hs = float(stats.df.loc[ns2id]['HS_X'][1])
+                self.marine_hs = float(self.hs * stats.df.loc[ns2id]['M_X'][1])
             except:
                 self.marine_hs = self.hs
 
             try:
-                self.alien_hs = float(stats.df.loc[ns2id]['HS_X'][2])
+                self.alien_hs = float(self.hs * stats.df.loc[ns2id]['M_X'][2])
             except:
                 self.alien_hs = self.hs
 
@@ -118,10 +120,10 @@ class TeamComp():
         self.aliens_std = np.std(self.aliens_hs)
         self.delta_std = abs(self.marines_std - self.aliens_std)
 
-        # Scoring for team comp
+        # Team comp score for the combination (less is better).
         self.score = (self.delta_avg ** 2 + self.delta_std ** 2) ** 0.5
 
-        # Scoring for player team repeat
+        # Player team repeat score for the combination (less is better).
         self.score_tr = sum([p.marine_p for p in self.marine_players]) + sum([p.alien_p for p in self.alien_players])
 
     def __eq__(self, other):
@@ -142,18 +144,19 @@ class TeamComp():
 
 
 class Shuffle():
-    def __init__(self, ns2ids, hiveskills):
+    def __init__(self, ns2ids, hiveskills, stats):
         logging.info(f'Requested shuffle with {len(ns2ids)} players.')
-        if len(ns2ids) >= 2:
-            stats.update()
-            self.ns2ids = ns2ids
-            self.players = [Player(x, hiveskills[i]) for i, x in enumerate(ns2ids)]
 
-            self.conn = MySQLdb.connect(host=config.MYSQL_HOST, user=config.MYSQL_USER, passwd=config.MYSQL_PASS,
+        self.stats = stats
+        self.stats.update()
+
+        if len(ns2ids) >= 2:
+            self.ns2ids = ns2ids
+            self.players = [Player(x, hiveskills[i], self.stats) for i, x in enumerate(ns2ids)]
+
+            self.conn = pymysql.connect(host=config.MYSQL_HOST, user=config.MYSQL_USER, passwd=config.MYSQL_PASS,
                                         db=config.MYSQL_DB)
             self.shuffle()
-            # self.plots()
-            # self.discord_webhook()
 
     def shuffle(self):
         start = time.time()
@@ -172,7 +175,7 @@ class Shuffle():
             for team_pairs in [[t1, t2], [t2, t1]]:
                 matchups.append(TeamComp(*team_pairs))
 
-        matchups_score_cutoff = [m for m in matchups if m.score < 100]
+        matchups_score_cutoff = [m for m in matchups if m.score < config.SCORE_CUTOFF]
 
         self.best = min(matchups_score_cutoff, key=lambda x: x.score_tr)
 

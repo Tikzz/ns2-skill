@@ -18,4 +18,4 @@ USER ns2-skill
 
 EXPOSE 8100
 
-CMD ["venv/bin/uwsgi", "--ini", "app.ini"]
+CMD ["venv/bin/python", "run.py"]

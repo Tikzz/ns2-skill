@@ -1,14 +1,13 @@
 import itertools
-import json
 import logging
 import math
 import time
 
-import pymysql.cursors
 import numpy as np
 import pandas as pd
 
-from app import config
+import config
+from db import Database, QUERY
 
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
@@ -19,14 +18,11 @@ class Stats():
 
     def update(self):
         start = time.time()
-        conn = pymysql.connect(host=config.MYSQL_HOST, user=config.MYSQL_USER, passwd=config.MYSQL_PASS,
-                               db=config.MYSQL_DB)
-        prs = pd.read_sql_query(
-            'select prs.roundId, prs.steamId, ps.hiveSkill, prs.playerName, prs.lastTeam,'
-            ' if(prs.lastTeam=winningTeam,1,0) wins, if(prs.lastTeam=winningTeam,0,1) losses from PlayerRoundStats prs'
-            ' inner join RoundInfo ri on ri.roundId = prs.roundId inner join PlayerStats ps on ps.steamId = prs.steamId',
-            conn)
-        conn.close()
+
+        with Database() as db:
+            data = db.execute(QUERY).fetchall()
+            prs = pd.DataFrame(data)
+
         logging.info(f'SQL fetched in {time.time()-start:.3f} secs ({len(prs)} round players)')
 
         n = config.N
@@ -43,7 +39,6 @@ class Stats():
         # Final multiplier of hive skill per team
         self.df['M_X'] = (self.df['winrate'] * 2 * self.df['P_X'] + (1 - self.df['P_X']))
 
-
         # Get the proportion of games played per team, of last n_weight matches.
         # This is used for shuffle purposes to avoid putting the same players in a same team a lot.
         n_weight = config.N_WEIGHT
@@ -57,8 +52,11 @@ class Stats():
         logging.info(f'Hive per team updated in {(time.time()-start)*1000:.0f} ms ({len(self.df)} unique players)')
 
 
+stats = Stats()
+
+
 class Player():
-    def __init__(self, ns2id, hiveskill, stats):
+    def __init__(self, ns2id, hiveskill):
         self.ns2id = ns2id
         self.hs = hiveskill
 
@@ -95,7 +93,7 @@ class Player():
     def json(self):
         response = {'ns2id': self.ns2id, 'marine_skill': self.marine_hs, 'alien_skill': self.alien_hs}
 
-        return json.dumps(response)
+        return response
 
     def __eq__(self, other):
         return self.ns2id == other.ns2id
@@ -144,24 +142,21 @@ class TeamComp():
 
 
 class Shuffle():
-    def __init__(self, ns2ids, hiveskills, stats):
+    def __init__(self, ns2ids, hiveskills):
         logging.info(f'Requested shuffle with {len(ns2ids)} players.')
 
-        self.stats = stats
-        self.stats.update()
+        stats.update()
 
         if len(ns2ids) >= 2:
             self.ns2ids = ns2ids
-            self.players = [Player(x, hiveskills[i], self.stats) for i, x in enumerate(ns2ids)]
+            self.players = [Player(x, hiveskills[i]) for i, x in enumerate(ns2ids)]
 
-            self.conn = pymysql.connect(host=config.MYSQL_HOST, user=config.MYSQL_USER, passwd=config.MYSQL_PASS,
-                                        db=config.MYSQL_DB)
             self.shuffle()
 
     def shuffle(self):
         start = time.time()
         team_size = int(math.floor(len(self.players) / 2))
-        group_combs = itertools.combinations(self.players, team_size)
+        group_combs = list(itertools.combinations(self.players, team_size))
 
         matchups = []
 
@@ -187,13 +182,13 @@ class Shuffle():
         response = {
             'team1': [p.ns2id for p in self.best.marine_players],
             'team2': [p.ns2id for p in self.best.alien_players],
-            'team1_marine_skill': [int(p.marine_hs) for p in self.best.marine_players],
-            'team1_alien_skill': [int(p.alien_hs) for p in self.best.alien_players],
-            'team2_marine_skill': [int(p.marine_hs) for p in self.best.marine_players],
-            'team2_alien_skill': [int(p.alien_hs) for p in self.best.alien_players],
             'diagnostics': {
                 'Score': self.best.score,
                 'RScore': self.best.score_tr
             }}
 
-        return json.dumps(response)
+        return response
+
+
+Shuffle([1291449, 3869225, 34583831, 41727273, 44513487, 44618947, 54888603, 55422011, 57378783, 79089452, 81009203,
+         98383317, 139217532, 333858003, 356935348, 393094819], [11, 22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])

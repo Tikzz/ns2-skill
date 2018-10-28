@@ -1,5 +1,26 @@
 # ns2-skill
 
+## Installation
+Ensure you have Python >3.6 installed and it's the default one (run `python` and check the version)
+
+```bash
+pip install virtualenv
+git clone https://github.com/Tikzz/ns2-skill.git
+cd ns2-skill
+virtualenv venv
+
+# Linux
+source venv/bin/activate
+# Windows
+venv\Scripts\activate
+
+pip install -r requirements.txt
+python run.py
+```
+
+By default it listens for POST requests on port 8100. Configure the ExternalShuffle mod accordingly.
+
+
 ## Hive skill per teams method (Bleu)
 
 ### Teams:

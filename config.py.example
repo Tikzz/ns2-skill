@@ -1,7 +1,15 @@
+# Either 'SQLITE' or 'MYSQL'
+DATABASE = 'SQLITE'
+
+# The following is optional if using SQLITE
 MYSQL_HOST = ''
 MYSQL_USER = ''
 MYSQL_PASS = ''
 MYSQL_DB = 'wonitor_ns2plus'
+
+# The following is optional if using MYSQL
+SQLITE_FILE = '/path/to/ns2plus.sqlite'
+#SQLITE_FILE = 'C:\\path\\to\\ns2plus.sqlite'
 
 # Constant values used in calculations
 
